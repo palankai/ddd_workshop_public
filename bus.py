@@ -15,5 +15,5 @@ class FakeBus:
     def clear(self):
         self.messages = []
 
-    def get(self):
-        return self.messages[-1]
+    def pop(self):
+        return self.messages.pop()

@@ -21,5 +21,10 @@ class RemoveFrom10Seconds(typing.NamedTuple):
 class RemoveFrom15Seconds(typing.NamedTuple):
     price: int
 
+
 class GetOffPosition(typing.NamedTuple):
     pass
+
+
+class ThresholdUpdate(typing.NamedTuple):
+    price: int
