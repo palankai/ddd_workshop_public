@@ -10,7 +10,7 @@ class PriceUpdated(typing.NamedTuple):
 
 
 class SendToMeIn(typing.NamedTuple):
-    message: Message
+    message: str
     seconds: int
 
 
@@ -20,3 +20,6 @@ class RemoveFrom10Seconds(typing.NamedTuple):
 
 class RemoveFrom15Seconds(typing.NamedTuple):
     price: int
+
+class GetOffPosition(typing.NamedTuple):
+    pass
