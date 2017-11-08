@@ -24,6 +24,10 @@ class Machine:
         elif isinstance(message, messages.ThresholdUpdate):
             self.update_threshold(message)
 
+    def process_everything(self):
+        for _ in range(len(self.bus.messages)):
+            self.process()
+
     def handle_remove_from_ten(self, message):
         if len(self.tensec) > 1:
             self.tensec.pop(message.price)
