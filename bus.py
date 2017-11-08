@@ -10,7 +10,7 @@ class FakeBus:
         self.clear()
 
     def publish(self, message):
-        self._messages.append(message)
+        self.messages.append(message)
 
     def clear(self):
-        self._messages = []
+        self.messages = []
