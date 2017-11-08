@@ -23,6 +23,25 @@ class TestOrder:
                 }
             ''')
 
+    def test_add_prices_to_document(self):
+        # given document
+        document = '{}'
+        order = Order(document)
+
+        # because we add line
+        order.add_line({'item': 'Burguer', 'qty': 1})
+        order.add_price(1, 100)
+
+        # We should have one line
+        assert json_decode(order.document) == \
+            json_decode('''
+                {
+                    "lines": [
+                        {"id": 1, "item": "Burguer", "qty": 1, "price": 100}
+                    ]
+                }
+            ''')
+
     def test_add_lines_to_document_with_line(self):
         # given document
         document = '''

@@ -15,3 +15,15 @@ class Order:
         line['id'] = len(object['lines']) + 1
         object['lines'].append(line)
         self.document = json_encode(object)
+
+    def add_price(self, id, price):
+        object = json_decode(self.document)
+        for line in object['lines']:
+            if line['id'] == id:
+                line['price'] = price
+        self.document = json_encode(object)
+
+    def pay_all(self):
+        object = json_decode(self.document)
+        object['payed'] = True
+        self.document = json_encode(object)

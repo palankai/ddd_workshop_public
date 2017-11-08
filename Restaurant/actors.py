@@ -6,9 +6,10 @@ class Waiter:
     def __init__(self, handler):
         self.handler = handler
 
-    def place_order(self):
+    def handle(self):
         order = Order()
-        self.handler.handle(order)
+        return self.handler.handle(order)
+
 
 class Cook:
 
@@ -16,11 +17,31 @@ class Cook:
         self.handler = handler
 
     def handle(self, order):
-        order.add_line({'item': 'Cheese', 'qty': 1, 'price': 1})
-        self.handler.handle(order)
+        order.add_line({'item': 'Cheese', 'qty': 1})
+        return self.handler.handle(order)
+
+
+class AsstMan:
+
+    def __init__(self, handler):
+        self.handler = handler
+
+    def handle(self, order):
+        order.add_price(1, 100)
+        return self.handler.handle(order)
+
+
+class Cashier:
+
+    def __init__(self, handler):
+        self.handler = handler
+
+    def handle(self, order):
+        order.pay_all()
+        return self.handler.handle(order)
 
 
 class OrderPrinter:
 
     def handle(self, order):
-        print(order.document)
+        return order.document
