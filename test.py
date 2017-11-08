@@ -5,7 +5,7 @@ from bus import FakeBus
 class TestX:
 
     def test_we_send_future_message_ourself(self):
-        starter = PositionAccured()
+        starter = PositionAccured(100)
         bus = FakeBus()
 
         bus.publish(starter)

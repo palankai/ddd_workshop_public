@@ -1,26 +1,22 @@
 import typing
 
 
-class Message(typing.NamedTuple):
-    pass
-
-
-class PositionAccured(Message):
+class PositionAccured(typing.NamedTuple):
     price: int
 
 
-class PriceUpdated(Message):
+class PriceUpdated(typing.NamedTuple):
     price: str
 
 
-class SendToMeIn(Message):
+class SendToMeIn(typing.NamedTuple):
     message: Message
     seconds: int
 
 
-class RemoveFrom10Seconds(Message):
+class RemoveFrom10Seconds(typing.NamedTuple):
     price: int
 
 
-class RemoveFrom15Seconds(Message):
+class RemoveFrom15Seconds(typing.NamedTuple):
     price: int
