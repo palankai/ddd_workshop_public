@@ -1,2 +1,2 @@
 all:
-	pytest test.py -vs
+	pytest test_service.py -vs
