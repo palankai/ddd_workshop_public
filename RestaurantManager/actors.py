@@ -1,4 +1,5 @@
 from pprint import pprint
+import collections
 import os
 import queue
 import threading
@@ -30,21 +31,24 @@ class OrderPrinter(HandleOrder):
         pprint(order)
 
 
-class Waiter(Forwarder):
+class Waiter:
     """Originator"""
+
+    def __init__(self, bus):
+        self._bus = bus
 
     def place_order(self, **kwargs):
         order = OrderDocument(kwargs)
-        self.forward(order)
+        self._bus.publish('order_placed', order)
 
 
-class Cook(HandleOrder, Forwarder):
+class Cook(HandleOrder):
     """Enricher"""
 
-    def __init__(self, handler, time_to_sleep, name):
+    def __init__(self, bus, time_to_sleep, name):
         self._name = name
         self._time_to_sleep = time_to_sleep
-        super().__init__(handler)
+        self._bus = bus
 
     def handle(self, order):
         time.sleep(self._time_to_sleep)
@@ -57,25 +61,28 @@ class Cook(HandleOrder, Forwarder):
         )
         order.cook_time = 600
         order.made_it = self._name
-        self.forward(order)
+        self._bus.publish('order_cooked', order)
 
 
-class AssistantManager(HandleOrder, Forwarder):
+class AssistantManager:
     """Enricher"""
+
+    def __init__(self, bus):
+        self._bus = bus
 
     def handle(self, order):
         for l in order.lines:
             l.price = 12
-        self.forward(order)
+        self._bus.publish('order_priced', order)
 
 
-class Cashier(HandleOrder, Forwarder):
+class Cashier:
     """Enricher"""
 
-    def __init__(self, handler):
+    def __init__(self, bus):
         self._orders = {}
         self._processed = 0
-        super().__init__(handler)
+        self._bus = bus
 
     def handle(self, order):
         self._orders[order.reference] = order
@@ -84,7 +91,7 @@ class Cashier(HandleOrder, Forwarder):
         order = self._orders[reference]
         order.paid = True
         self._processed += 1
-        self.forward(order)
+        self._bus.publish('order_paid', order)
 
     def get_info(self):
         return f'Processed: {self._processed}'
@@ -117,6 +124,29 @@ class RoundRobinDispatcher:
         handler = self._handlers.pop(0)
         self._handlers.append(handler)
         handler.handle(order.copy())
+
+
+class ThreadProcessor:
+
+    def __init__(self):
+        self._running = False
+
+    def run_once(self):
+        raise NotImplementedError()
+
+    def run(self):
+        assert not self._running
+        self._running = True
+        while self._running:
+            self.run_once()
+        self._running = False
+
+    def start(self):
+        manager = threading.Thread(target=self.run)
+        manager.start()
+
+    def stop(self):
+        self._running = False
 
 
 class QueueHandler:
@@ -157,28 +187,37 @@ class QueueHandler:
     def stop(self):
         self._running = False
 
-class Monitor:
+
+class TopicBasedPubSub:
+
+    def __init__(self):
+        self._handlers = collections.defaultdict(tuple)
+        self._lock = threading.Lock()
+
+    def publish(self, topic, message):
+        for handler in self._handlers[topic]:
+            handler(message.copy())
+
+    def subscribe(self, topic, handler):
+        self._lock.acquire()
+        try:
+            self._handlers[topic] = self._handlers[topic] + (handler, )
+        finally:
+            self._lock.release()
+
+
+class Monitor(ThreadProcessor):
 
     def __init__(self, handlers):
         self._handlers = handlers
-        self._running = False
+        super().__init__()
 
-    def start(self):
-        assert not self._running
-        self._running = True
-        def internal():
-            while self._running:
-                print('*' * 40)
-                for handler in self._handlers:
-                    print('*', handler.get_info())
-                print('*' * 40)
-                time.sleep(.5)
-
-        manager = threading.Thread(target=internal)
-        manager.start()
-
-    def stop(self):
-        self._running = False
+    def run_once(self):
+        print('*' * 40)
+        for handler in self._handlers:
+            print('*', handler.get_info())
+        print('*' * 40)
+        time.sleep(.5)
 
 
 class MoreFairDispatcher:
@@ -200,33 +239,53 @@ class MoreFairDispatcher:
                 return handler
 
 def main():
+    bus = TopicBasedPubSub()
+
     printer = OrderPrinter()
-    cashier = Cashier(printer)
-    assman = AssistantManager(cashier)
+
+    cashier = Cashier(bus)
+
+    assman = AssistantManager(bus)
     assman_queue = QueueHandler(assman, 'assmanQ')
-    cook1 = Cook(assman_queue, .1, 'Cook 1')
-    cook2 = Cook(assman_queue, .3, 'Cook 2')
-    cook3 = Cook(assman_queue, .5, 'Cook 3')
+
+
+    cook1 = Cook(bus, .1, 'Cook 1')
+    cook2 = Cook(bus, .3, 'Cook 2')
+    cook3 = Cook(bus, .5, 'Cook 3')
     queue_handler1 = QueueHandler(cook1, 'cook1Q')
     queue_handler2 = QueueHandler(cook2, 'cook2Q')
     queue_handler3 = QueueHandler(cook3, 'cook3Q')
     # multiplexer = RoundRobinDispatcher([queue_handler1, queue_handler2, queue_handler3])
     more_fair_dispatcher = MoreFairDispatcher([queue_handler1, queue_handler2, queue_handler3], 5)
     mfd_queue = QueueHandler(more_fair_dispatcher, 'MFD')
-    waiter = Waiter(mfd_queue)
 
-    for indx in range(100):
-        waiter.place_order(
-            reference=f'ABC-{indx}',
-            lines=[{'name': 'Cheese Pizza', 'qty': 1}]
-        )
+    waiter = Waiter(bus)
+
     monitor = Monitor([queue_handler1, queue_handler2, queue_handler3, assman_queue, mfd_queue, cashier])
+
+    # Subscriptions
+    bus.subscribe('order_placed', mfd_queue.handle)
+    bus.subscribe('order_cooked', assman_queue.handle)
+    bus.subscribe('order_priced', cashier.handle)
+    bus.subscribe('order_paid', printer.handle)
+
+
+
+    # Start
     monitor.start()
     queue_handler1.start()
     queue_handler2.start()
     queue_handler3.start()
     assman_queue.start()
     mfd_queue.start()
+
+
+
+    for indx in range(100):
+        waiter.place_order(
+            reference=f'ABC-{indx}',
+            lines=[{'name': 'Cheese Pizza', 'qty': 1}]
+        )
 
 
     paid_total = 0
