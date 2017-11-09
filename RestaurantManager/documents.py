@@ -7,8 +7,14 @@ class OrderDocument:
     def __init__(self, src=None):
         self._src = src or {}
 
+    def __hasattr__(self, name):
+        return name in self._src
+
     def __getattr__(self, name):
-        return self._src[name]
+        try:
+            return self._src[name]
+        except KeyError:
+            raise AttributeError(f'Attribute not found {name}')
 
     def __setattr__(self, name, value):
         if name.startswith('_'):
