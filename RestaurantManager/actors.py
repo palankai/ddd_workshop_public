@@ -41,12 +41,13 @@ class Waiter(Forwarder):
 class Cook(HandleOrder, Forwarder):
     """Enricher"""
 
-    def __init__(self, handler, name):
+    def __init__(self, handler, time_to_sleep, name):
         self._name = name
+        self._time_to_sleep = time_to_sleep
         super().__init__(handler)
 
     def handle(self, order):
-        time.sleep(.1)
+        time.sleep(self._time_to_sleep)
         order.ingredients = []
         order.ingredients.append(
             {'name': 'cheese', 'qty': 3},
@@ -176,9 +177,9 @@ def main():
     cashier = Cashier(printer)
     assman = AssistantManager(cashier)
     assman_queue = QueueHandler(assman, 'assmanQ')
-    cook1 = Cook(assman_queue, 'Cook 1')
-    cook2 = Cook(assman_queue, 'Cook 2')
-    cook3 = Cook(assman_queue, 'Cook 3')
+    cook1 = Cook(assman_queue, .1, 'Cook 1')
+    cook2 = Cook(assman_queue, .3, 'Cook 2')
+    cook3 = Cook(assman_queue, .5, 'Cook 3')
     queue_handler1 = QueueHandler(cook1, 'cook1Q')
     queue_handler2 = QueueHandler(cook2, 'cook2Q')
     queue_handler3 = QueueHandler(cook3, 'cook3Q')
