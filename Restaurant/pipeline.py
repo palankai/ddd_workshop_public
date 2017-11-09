@@ -6,10 +6,11 @@ import actors
 cashier = actors.Cashier(actors.OrderPrinter())
 
 waiter = actors.Waiter(
-    actors.Multiplexor([
+    actors.RoundRobinDispatcher([
         actors.Cook(cashier, '1'),
         actors.Cook(cashier, '2'),
         actors.Cook(cashier, '3'),
     ])
 )
-waiter.handle()
+for _ in range(10):
+    waiter.handle()

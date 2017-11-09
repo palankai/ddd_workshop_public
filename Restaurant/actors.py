@@ -64,3 +64,15 @@ class Multiplexor:
     def handle(self, order):
         for handler in self.handlers:
             handler.handle(order)
+
+
+class RoundRobinDispatcher:
+
+    def __init__(self, handlers):
+        self.handlers = handlers
+
+    def handle(self, order):
+        handler = self.handlers.pop(0)
+        handler.handle(order)
+        self.handlers.append(handler)
+
