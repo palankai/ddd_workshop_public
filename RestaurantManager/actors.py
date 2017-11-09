@@ -74,6 +74,7 @@ class Cashier(HandleOrder, Forwarder):
 
     def __init__(self, handler):
         self._orders = {}
+        self._processed = 0
         super().__init__(handler)
 
     def handle(self, order):
@@ -82,7 +83,11 @@ class Cashier(HandleOrder, Forwarder):
     def pay(self, reference):
         order = self._orders[reference]
         order.paid = True
+        self._processed += 1
         self.forward(order)
+
+    def get_info(self):
+        return f'Processed: {self._processed}'
 
     def get_outstanding_orders(self):
         orders = []
@@ -131,16 +136,19 @@ class QueueHandler:
     def get_name(self):
         return self._name
 
+    def get_info(self):
+        return f'{self.get_name()}: {self.get_queue_size()}'
+
     def start(self):
         assert not self._running
         self._running = True
 
         def internal():
             while self._running:
-                if self._queue.empty():
-                    time.sleep(.5)
+                try:
+                    order = self._queue.get(timeout=1)
+                except queue.Empty:
                     continue
-                order = self._queue.get(False)
                 self._handler.handle(order)
 
         manager = threading.Thread(target=internal)
@@ -162,15 +170,34 @@ class Monitor:
             while self._running:
                 print('*' * 40)
                 for handler in self._handlers:
-                    print('*', handler.get_name(), handler.get_queue_size())
+                    print('*', handler.get_info())
                 print('*' * 40)
-                time.sleep(.8)
+                time.sleep(.5)
 
         manager = threading.Thread(target=internal)
         manager.start()
 
     def stop(self):
         self._running = False
+
+
+class MoreFairDispatcher:
+
+    def __init__(self, handlers, limit):
+        self._limit = limit
+        self._handlers = handlers
+
+    def handle(self, order):
+        order = order.copy()
+        handler = None
+        while handler is None:
+            handler = self._pick_one_handler()
+        handler.handle(order)
+
+    def _pick_one_handler(self):
+        for handler in self._handlers:
+            if handler.get_queue_size() < self._limit:
+                return handler
 
 def main():
     printer = OrderPrinter()
@@ -183,20 +210,23 @@ def main():
     queue_handler1 = QueueHandler(cook1, 'cook1Q')
     queue_handler2 = QueueHandler(cook2, 'cook2Q')
     queue_handler3 = QueueHandler(cook3, 'cook3Q')
-    multiplexer = RoundRobinDispatcher([queue_handler1, queue_handler2, queue_handler3])
-    waiter = Waiter(multiplexer)
+    # multiplexer = RoundRobinDispatcher([queue_handler1, queue_handler2, queue_handler3])
+    more_fair_dispatcher = MoreFairDispatcher([queue_handler1, queue_handler2, queue_handler3], 5)
+    mfd_queue = QueueHandler(more_fair_dispatcher, 'MFD')
+    waiter = Waiter(mfd_queue)
 
     for indx in range(100):
         waiter.place_order(
             reference=f'ABC-{indx}',
             lines=[{'name': 'Cheese Pizza', 'qty': 1}]
         )
+    monitor = Monitor([queue_handler1, queue_handler2, queue_handler3, assman_queue, mfd_queue, cashier])
+    monitor.start()
     queue_handler1.start()
     queue_handler2.start()
     queue_handler3.start()
     assman_queue.start()
-    monitor = Monitor([queue_handler1, queue_handler2, queue_handler3, assman_queue])
-    monitor.start()
+    mfd_queue.start()
 
 
     paid_total = 0
@@ -211,6 +241,7 @@ def main():
     queue_handler2.stop()
     queue_handler3.stop()
     assman_queue.stop()
+    mfd_queue.stop()
     monitor.stop()
 
 
