@@ -8,22 +8,22 @@ class Order:
         self.document = document or '{}'
 
     def add_line(self, line):
-        object = json_decode(self.document)
-        if 'lines' not in object:
-            object['lines'] = []
+        obj = json_decode(self.document)
+        if 'lines' not in obj:
+            obj['lines'] = []
 
-        line['id'] = len(object['lines']) + 1
-        object['lines'].append(line)
-        self.document = json_encode(object)
+        line['id'] = len(obj['lines']) + 1
+        obj['lines'].append(line)
+        self.document = json_encode(obj)
 
-    def add_price(self, id, price):
-        object = json_decode(self.document)
-        for line in object['lines']:
-            if line['id'] == id:
+    def add_price(self, _id, price):
+        obj = json_decode(self.document)
+        for line in obj['lines']:
+            if line['id'] == _id:
                 line['price'] = price
-        self.document = json_encode(object)
+        self.document = json_encode(obj)
 
     def pay_all(self):
-        object = json_decode(self.document)
-        object['payed'] = True
-        self.document = json_encode(object)
+        obj = json_decode(self.document)
+        obj['paid'] = True
+        self.document = json_encode(obj)

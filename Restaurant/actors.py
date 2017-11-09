@@ -1,3 +1,4 @@
+import time
 from order import Order
 
 
@@ -18,6 +19,7 @@ class Cook:
 
     def handle(self, order):
         order.add_line({'item': 'Cheese', 'qty': 1})
+        time.sleep(1)
         return self.handler.handle(order)
 
 
