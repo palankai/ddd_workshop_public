@@ -1,3 +1,6 @@
+import threading
+import time
+
 import actors
 
 
@@ -16,6 +19,9 @@ assman.start()
 cook_one.start()
 cook_two.start()
 cook_three.start()
+
+monitor = actors.Monitor([assman, cook_one, cook_two, cook_three])
+monitor.start()
 
 for _ in range(100):
     waiter.handle()

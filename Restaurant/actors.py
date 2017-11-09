@@ -1,6 +1,7 @@
 import time
 from order import Order
 import threading
+import uuid
 
 
 class Waiter:
@@ -78,15 +79,18 @@ class RoundRobinDispatcher:
         self.handlers.append(handler)
 
 
-class ThreadedHandler():
+class ThreadedHandler:
 
-    def __init__(self, handler):
-        threading.Thread.__init__(self)
+    def __init__(self, handler, name=None):
         self.handler = handler
         self.queue = []
+        self.name = name or str(uuid.uuid4())[:4]
 
     def handle(self, order):
         self.queue.append(order)
+
+    def get_info(self):
+        return '{}: {}'.format(self.name, len(self.queue))
 
     def start(self):
         def process():
@@ -96,4 +100,18 @@ class ThreadedHandler():
                     self.handler.handle(order)
                 else:
                     time.sleep(0.5)
+        threading.Thread(target=process).start()
+
+
+class Monitor:
+
+    def __init__(self, handler):
+        self.handlers = handler
+
+    def start(self):
+        def process():
+            while True:
+                time.sleep(5)
+                for handler in self.handlers:
+                    print(handler.get_info())
         threading.Thread(target=process).start()
