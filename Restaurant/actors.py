@@ -1,5 +1,6 @@
 import time
 from order import Order
+import threading
 
 
 class Waiter:
@@ -20,7 +21,7 @@ class Cook:
 
     def handle(self, order):
         order.add_line({'cook': self.name, 'item': 'Cheese', 'qty': 1})
-        time.sleep(1)
+        time.sleep(2)
         return self.handler.handle(order)
 
 
@@ -76,3 +77,23 @@ class RoundRobinDispatcher:
         handler.handle(order)
         self.handlers.append(handler)
 
+
+class ThreadedHandler():
+
+    def __init__(self, handler):
+        threading.Thread.__init__(self)
+        self.handler = handler
+        self.queue = []
+
+    def handle(self, order):
+        self.queue.append(order)
+
+    def start(self):
+        def process():
+            while True:
+                if len(self.queue) > 0:
+                    order = self.queue.pop(0)
+                    self.handler.handle(order)
+                else:
+                    time.sleep(0.5)
+        threading.Thread(target=process).start()

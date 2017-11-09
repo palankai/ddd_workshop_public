@@ -19,7 +19,7 @@ class TestWaiter:
 
         assert len(json_decode(result)['lines']) == 1
         assert json_decode(result)['lines'][0] == \
-            {'id': 1, 'item': 'Cheese', 'qty': 1}
+            {'cook': None, 'id': 1, 'item': 'Cheese', 'qty': 1}
 
     def test_asst_man_cook_and_waiter_placing_order(self):
         cook = actors.Cook(actors.AsstMan(actors.OrderString()))
