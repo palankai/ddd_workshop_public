@@ -14,11 +14,12 @@ class Waiter:
 
 class Cook:
 
-    def __init__(self, handler):
+    def __init__(self, handler, name=None):
         self.handler = handler
+        self.name = name
 
     def handle(self, order):
-        order.add_line({'item': 'Cheese', 'qty': 1})
+        order.add_line({'cook': self.name, 'item': 'Cheese', 'qty': 1})
         time.sleep(1)
         return self.handler.handle(order)
 
@@ -46,4 +47,20 @@ class Cashier:
 class OrderPrinter:
 
     def handle(self, order):
+        print(order.document)
+
+
+class OrderString:
+
+    def handle(self, order):
         return order.document
+
+
+class Multiplexor:
+
+    def __init__(self, handlers):
+        self.handlers = handlers
+
+    def handle(self, order):
+        for handler in self.handlers:
+            handler.handle(order)
