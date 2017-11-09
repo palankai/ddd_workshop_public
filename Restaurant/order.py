@@ -1,5 +1,5 @@
-from json import loads as json_decode
 from json import dumps as json_encode
+from json import loads as json_decode
 import uuid
 
 
@@ -7,6 +7,12 @@ class Order:
 
     def __init__(self, document=None):
         self.document = document or '{}'
+        self.add_id()
+
+    def add_id(self):
+        obj = json_decode(self.document)
+        obj['id'] = str(uuid.uuid4())[:8]
+        self.document = json_encode(obj)
 
     def add_line(self, line):
         obj = json_decode(self.document)
