@@ -28,6 +28,21 @@ class TopicBasedPubSub:
         finally:
             self._lock.release()
 
+    def unsubscribe(self, topic, handler):
+        self._lock.acquire()
+        try:
+            handlers = list(self._handlers[topic])
+            handlers.remove(handler)
+            if len(handlers) > 0:
+                self._handlers[topic] = tuple(handlers)
+            else:
+                del self._handlers[topic]
+        finally:
+            self._lock.release()
+
+    def get_info(self):
+        return f'BUS: {len(self._handlers)}'
+
 
 
 class ESTopicBasedPubSub:

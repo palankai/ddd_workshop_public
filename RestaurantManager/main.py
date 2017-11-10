@@ -35,7 +35,10 @@ def main(envs, prog, raw_args):
 
     midget_house = MidgetHouse(bus)
 
-    monitor = Monitor([queue_handler1, queue_handler2, queue_handler3, assman_queue, mfd_queue, cashier, midget_house])
+    monitor = Monitor([
+        queue_handler1, queue_handler2, queue_handler3, assman_queue,
+        mfd_queue, cashier, midget_house, bus
+    ])
 
 
     # Subscriptions

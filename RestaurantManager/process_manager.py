@@ -35,6 +35,7 @@ class MidgetHouse:
     def handle_unsubscribe(self, message):
         if message.correlation_id in self._midgets:
             del self._midgets[message.correlation_id]
+            self._bus.unsubscribe(message.correlation_id, self.handle_by_correlation_id)
 
     def get_info(self):
         return f'MidgetHouse: {len(self._midgets)}'
