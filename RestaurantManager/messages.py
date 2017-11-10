@@ -52,3 +52,6 @@ class OrderPriced(Event, OrderBased):
 
 class OrderPaid(Event, OrderBased):
     pass
+
+class OrderCompleted(Event, OrderBased):
+    pass

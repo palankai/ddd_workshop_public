@@ -33,9 +33,10 @@ def main(envs, prog, raw_args):
 
     waiter = Waiter(bus)
 
-    monitor = Monitor([queue_handler1, queue_handler2, queue_handler3, assman_queue, mfd_queue, cashier])
-
     midget_house = MidgetHouse(bus)
+
+    monitor = Monitor([queue_handler1, queue_handler2, queue_handler3, assman_queue, mfd_queue, cashier, midget_house])
+
 
     # Subscriptions
     # bus.subscribe('order_placed', mfd_queue.handle)
@@ -50,6 +51,7 @@ def main(envs, prog, raw_args):
     bus.subscribe('order_paid', printer.handle)
 
     bus.subscribe('order_placed', midget_house.handle)
+    bus.subscribe('order_completed', midget_house.handle_unsubscribe)
 
     # Start
     # bus.start()
@@ -64,6 +66,9 @@ def main(envs, prog, raw_args):
 
     for indx in range(100):
         event = waiter.place_order(
+            doggy=True, # (indx % 2 == 0),
+            paid=False,
+            cooked=False,
             reference=f'ABC-{indx}',
             lines=[{'name': 'Cheese Pizza', 'qty': 1}]
         )
@@ -71,7 +76,7 @@ def main(envs, prog, raw_args):
 
 
     paid_total = 0
-    while paid_total < 100:
+    while paid_total < 101 and midget_house.count() > 0:
         for order in cashier.get_outstanding_orders():
             cashier.pay(order.reference)
             paid_total += 1

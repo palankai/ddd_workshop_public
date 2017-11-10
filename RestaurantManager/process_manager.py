@@ -3,6 +3,8 @@ import functools
 from messages import OrderPlaced, CookFood
 from messages import FoodCooked, PriceOrder
 from messages import OrderPriced, TakePayment
+from messages import OrderPaid
+from messages import OrderCompleted
 
 
 def methoddispatch(func):
@@ -21,16 +23,27 @@ class MidgetHouse:
         self._midgets = {}
 
     def handle(self, message):
-        midget = Midget(self._bus)
+        midget = MidgetForDoggy(self._bus)
         self._midgets[message.correlation_id] = midget
         self._bus.subscribe(message.correlation_id, self.handle_by_correlation_id)
 
     def handle_by_correlation_id(self, message):
-        midget = self._midgets[message.correlation_id]
-        midget.handle(message)
+        if message.correlation_id in self._midgets:
+            midget = self._midgets[message.correlation_id]
+            midget.handle(message)
+
+    def handle_unsubscribe(self, message):
+        if message.correlation_id in self._midgets:
+            del self._midgets[message.correlation_id]
+
+    def get_info(self):
+        return f'MidgetHouse: {len(self._midgets)}'
+
+    def count(self):
+        return len(self._midgets)
 
 
-class Midget:
+class MidgetForRegular:
 
     def __init__(self, bus):
         self._bus = bus
@@ -38,6 +51,7 @@ class Midget:
         self.handle.register(OrderPlaced, self.handle_order_placed)
         self.handle.register(FoodCooked, self.handle_food_cooked)
         self.handle.register(OrderPriced, self.handle_order_priced)
+        self.handle.register(OrderPaid, self.handle_order_paid)
 
     def handle(self, message):
         # Ignore messages that we don't want to process
@@ -72,3 +86,70 @@ class Midget:
                 causation_id=message.message_id
             )
         )
+
+    def handle_order_paid(self, message):
+        self._bus.publish(
+            'order_completed',
+            OrderCompleted(
+                message.order,
+                correlation_id=message.correlation_id,
+                causation_id=message.message_id
+            )
+        )
+
+
+
+class MidgetForDoggy:
+
+    def __init__(self, bus):
+        self._bus = bus
+        self.handle = functools.singledispatch(self.handle)
+        self.handle.register(OrderPlaced, self.handle_order_placed)
+        self.handle.register(OrderPriced, self.handle_order_priced)
+        self.handle.register(OrderPaid, self.handle_order_paid)
+        self.handle.register(FoodCooked, self.handle_food_cooked)
+
+    def handle(self, message):
+        # Ignore messages that we don't want to process
+        return
+
+    def handle_order_placed(self, message):
+        self._bus.publish(
+            'price_order',
+            PriceOrder(
+                message.order,
+                correlation_id=message.correlation_id,
+                causation_id=message.message_id
+            )
+        )
+
+    def handle_order_priced(self, message):
+        self._bus.publish(
+            'take_payment',
+            TakePayment(
+                message.order,
+                correlation_id=message.correlation_id,
+                causation_id=message.message_id
+            )
+        )
+
+    def handle_order_paid(self, message):
+        self._bus.publish(
+            'cook_food',
+            CookFood(
+                message.order,
+                correlation_id=message.correlation_id,
+                causation_id=message.message_id
+            )
+        )
+
+    def handle_food_cooked(self, message):
+        self._bus.publish(
+            'order_completed',
+            OrderCompleted(
+                message.order,
+                correlation_id=message.correlation_id,
+                causation_id=message.message_id
+            )
+        )
+

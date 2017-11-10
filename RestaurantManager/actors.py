@@ -21,6 +21,7 @@ class OrderPrinter:
         pass
 
     def handle(self, event):
+        return
         print(f'{type(event)}; MessageId: {event.message_id} Caused by: {event.causation_id}, Correlation: {event.correlation_id}\n{event.order}')
 
 
@@ -50,6 +51,10 @@ class Cook:
 
     def handle(self, event):
         order = event.order
+        if order.doggy and not order.paid:
+            raise Exception('NO, Customer is doggy')
+        if not order.doggy and  order.paid:
+            raise Exception('Customer is not doggy')
         time.sleep(self._time_to_sleep)
         order.ingredients = []
         order.ingredients.append(
@@ -60,6 +65,7 @@ class Cook:
         )
         order.cook_time = 600
         order.made_it = self._name
+        order.cooked = True
         self._bus.publish(
             'order_cooked',
             FoodCooked(
@@ -109,7 +115,7 @@ class Cashier:
         self._processed += 1
         self._bus.publish(
             'order_paid',
-            OrderPriced(
+            OrderPaid(
                 order,
                 correlation_id=event.correlation_id,
                 causation_id=event.message_id
