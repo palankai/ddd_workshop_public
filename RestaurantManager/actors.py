@@ -5,6 +5,8 @@ import queue
 import threading
 import time
 import uuid
+import random
+import datetime
 
 from conrurrency import ThreadProcessor
 from documents import OrderDocument
@@ -41,6 +43,7 @@ class Waiter:
         return event
 
 
+
 class Cook:
     """Enricher"""
 
@@ -51,10 +54,6 @@ class Cook:
 
     def handle(self, event):
         order = event.order
-        if order.doggy and not order.paid:
-            raise Exception('NO, Customer is doggy')
-        if not order.doggy and  order.paid:
-            raise Exception('Customer is not doggy')
         time.sleep(self._time_to_sleep)
         order.ingredients = []
         order.ingredients.append(
@@ -133,6 +132,7 @@ class Cashier:
                 orders.append(order)
         return orders
 
+
 class Multiplexer:
 
     def __init__(self, handlers):
@@ -198,6 +198,46 @@ class QueueHandler(ThreadProcessor):
         except queue.Empty:
             return
         self._handler.handle(order)
+
+
+class AlarmClock(ThreadProcessor):
+
+    def __init__(self, bus):
+        self._messages = []
+        self._bus = bus
+        super().__init__()
+
+    def handle(self, message):
+        when = datetime.datetime.utcnow() + datetime.timedelta(seconds=message.delay)
+        self._messages.append((when, message))
+
+    def run_once(self):
+        now = datetime.datetime.utcnow()
+        for element in list(self._messages):
+            when, message = element
+            if now > when:
+                self._bus.publish(message.topic, message.message)
+                self._messages.remove(element)
+                print('******* WAKE **********')
+        time.sleep(1)
+
+
+
+class Chaos:
+
+    def __init__(self, handler, loose_ratio=0.3, duplication_ratio=0.4):
+        self._handler = handler
+        self._loose_ratio = loose_ratio
+        self._duplication_ratio = duplication_ratio
+        random.seed()
+
+    def handle(self, event):
+        rnd = random.random()
+        if rnd > (self._loose_ratio + self._duplication_ratio):
+            self._handler.handle(event)
+        elif rnd > self._loose_ratio:
+            self._handler.handle(event)
+            self._handler.handle(event)
 
 
 class Monitor(ThreadProcessor):

@@ -37,6 +37,18 @@ class TakePayment(Command, OrderBased):
     pass
 
 
+class DelayPublish(Command, Message):
+
+    def __init__(self, delay, topic, message, correlation_id, causation_id=None, message_id=None):
+        self.delay = delay
+        self.message = message
+        self.topic = topic
+        super().__init__(correlation_id, causation_id, message_id)
+
+
+class CookTimedOut(Event, OrderBased):
+    pass
+
 
 class OrderPlaced(Event, OrderBased):
     pass

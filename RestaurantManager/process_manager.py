@@ -5,6 +5,7 @@ from messages import FoodCooked, PriceOrder
 from messages import OrderPriced, TakePayment
 from messages import OrderPaid
 from messages import OrderCompleted
+from messages import DelayPublish, CookTimedOut
 
 
 def methoddispatch(func):
@@ -23,7 +24,7 @@ class MidgetHouse:
         self._midgets = {}
 
     def handle(self, message):
-        midget = MidgetForDoggy(self._bus)
+        midget = MidgetForRegular(self._bus)
         self._midgets[message.correlation_id] = midget
         self._bus.subscribe(message.correlation_id, self.handle_by_correlation_id)
 
@@ -53,22 +54,73 @@ class MidgetForRegular:
         self.handle.register(FoodCooked, self.handle_food_cooked)
         self.handle.register(OrderPriced, self.handle_order_priced)
         self.handle.register(OrderPaid, self.handle_order_paid)
+        self.handle.register(CookTimedOut, self.handle_cook_timedout)
+        self._cooked = []
 
     def handle(self, message):
         # Ignore messages that we don't want to process
         return
 
     def handle_order_placed(self, message):
+        if message.order.reference in self._cooked:
+            return
+        cmd = CookFood(
+            message.order,
+            correlation_id=message.correlation_id,
+            causation_id=message.message_id
+        )
+        timeout = CookTimedOut(
+            message.order,
+            correlation_id=message.correlation_id,
+            causation_id=message.message_id
+        )
+
         self._bus.publish(
-            'cook_food',
-            CookFood(
-                message.order,
+            'delay_publish',
+            DelayPublish(
+                delay=10,
+                topic='cook_food',
+                message=timeout,
                 correlation_id=message.correlation_id,
                 causation_id=message.message_id
             )
         )
+        self._bus.publish(
+            'cook_food',
+            cmd
+        )
+
+    def handle_cook_timedout(self, message):
+        if message.order.reference in self._cooked:
+            return
+        cmd = CookFood(
+            message.order,
+            correlation_id=message.correlation_id,
+            causation_id=message.message_id
+        )
+        timeout = CookTimedOut(
+            message.order,
+            correlation_id=message.correlation_id,
+            causation_id=message.message_id
+        )
+
+        self._bus.publish(
+            'delay_publish',
+            DelayPublish(
+                delay=10,
+                topic='cook_food',
+                message=timeout,
+                correlation_id=message.correlation_id,
+                causation_id=message.message_id
+            )
+        )
+        self._bus.publish(
+            'cook_food',
+            cmd
+        )
 
     def handle_food_cooked(self, message):
+        self._cooked.append(message.order.reference)
         self._bus.publish(
             'price_order',
             PriceOrder(

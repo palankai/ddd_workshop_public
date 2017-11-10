@@ -6,7 +6,8 @@ from buses import TopicBasedPubSub
 from messages import OrderPlaced, OrderPriced, OrderPaid, FoodCooked
 from actors import OrderPrinter, Cashier, Cook, Waiter, AssistantManager
 from actors import QueueHandler, MoreFairDispatcher
-from actors import Monitor
+from actors import Chaos
+from actors import Monitor, AlarmClock
 from process_manager import MidgetHouse
 
 
@@ -30,8 +31,10 @@ def main(envs, prog, raw_args):
     # multiplexer = RoundRobinDispatcher([queue_handler1, queue_handler2, queue_handler3])
     more_fair_dispatcher = MoreFairDispatcher([queue_handler1, queue_handler2, queue_handler3], 5)
     mfd_queue = QueueHandler(more_fair_dispatcher, 'MFD')
+    cook_queue_chaos = Chaos(mfd_queue, 0.5, 0)
 
     waiter = Waiter(bus)
+    alarm_clock = AlarmClock(bus)
 
     midget_house = MidgetHouse(bus)
 
@@ -47,7 +50,7 @@ def main(envs, prog, raw_args):
     # bus.subscribe('order_priced', cashier.handle)
     # bus.subscribe('order_paid', printer.handle)
 
-    bus.subscribe('cook_food', mfd_queue.handle)
+    bus.subscribe('cook_food', cook_queue_chaos.handle)
     bus.subscribe('price_order', assman_queue.handle)
     bus.subscribe('take_payment', cashier.handle)
 
@@ -55,6 +58,8 @@ def main(envs, prog, raw_args):
 
     bus.subscribe('order_placed', midget_house.handle)
     bus.subscribe('order_completed', midget_house.handle_unsubscribe)
+
+    bus.subscribe('delay_publish', alarm_clock.handle)
 
     # Start
     # bus.start()
@@ -64,12 +69,13 @@ def main(envs, prog, raw_args):
     queue_handler3.start()
     assman_queue.start()
     mfd_queue.start()
+    alarm_clock.start()
 
 
 
     for indx in range(100):
         event = waiter.place_order(
-            doggy=True, # (indx % 2 == 0),
+            doggy=False, # (indx % 2 == 0),
             paid=False,
             cooked=False,
             reference=f'ABC-{indx}',
@@ -92,6 +98,7 @@ def main(envs, prog, raw_args):
     assman_queue.stop()
     mfd_queue.stop()
     monitor.stop()
+    alarm_clock.stop()
 
 
 if __name__ == '__main__':
