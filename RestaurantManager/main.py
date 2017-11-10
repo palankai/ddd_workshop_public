@@ -22,16 +22,18 @@ def main(envs, prog, raw_args):
     assman_queue = QueueHandler(assman, 'assmanQ')
 
 
-    cook1 = Cook(bus, .1, 'Cook 1')
-    cook2 = Cook(bus, .3, 'Cook 2')
-    cook3 = Cook(bus, .5, 'Cook 3')
+    cooked = []
+
+    cook1 = Cook(bus, cooked, .1, 'Cook 1')
+    cook2 = Cook(bus, cooked, .3, 'Cook 2')
+    cook3 = Cook(bus, cooked, .5, 'Cook 3')
     queue_handler1 = QueueHandler(cook1, 'cook1Q')
     queue_handler2 = QueueHandler(cook2, 'cook2Q')
     queue_handler3 = QueueHandler(cook3, 'cook3Q')
     # multiplexer = RoundRobinDispatcher([queue_handler1, queue_handler2, queue_handler3])
     more_fair_dispatcher = MoreFairDispatcher([queue_handler1, queue_handler2, queue_handler3], 5)
     mfd_queue = QueueHandler(more_fair_dispatcher, 'MFD')
-    cook_queue_chaos = Chaos(mfd_queue, 0.5, 0)
+    cook_queue_chaos = Chaos(mfd_queue, 0.3, 0.3)
 
     waiter = Waiter(bus)
     alarm_clock = AlarmClock(bus)
@@ -89,7 +91,7 @@ def main(envs, prog, raw_args):
         for order in cashier.get_outstanding_orders():
             cashier.pay(order.reference)
             paid_total += 1
-        print('Wait for more orders to come...')
+        print(f'Wait for more orders to come...')
         time.sleep(1)
 
     queue_handler1.stop()

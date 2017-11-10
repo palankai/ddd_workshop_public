@@ -79,7 +79,7 @@ class MidgetForRegular:
             'delay_publish',
             DelayPublish(
                 delay=10,
-                topic='cook_food',
+                topic='timed_out',
                 message=timeout,
                 correlation_id=message.correlation_id,
                 causation_id=message.message_id

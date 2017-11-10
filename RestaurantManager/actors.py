@@ -47,13 +47,18 @@ class Waiter:
 class Cook:
     """Enricher"""
 
-    def __init__(self, bus, time_to_sleep, name):
+    def __init__(self, bus, cooked, time_to_sleep, name):
         self._name = name
         self._time_to_sleep = time_to_sleep
         self._bus = bus
+        self._cooked = cooked
 
     def handle(self, event):
         order = event.order
+        if order.reference in self._cooked:
+            print('*** DUPLICATED, IGNORE ***')
+            return
+        self._cooked.append(order.reference)
         time.sleep(self._time_to_sleep)
         order.ingredients = []
         order.ingredients.append(
@@ -233,9 +238,9 @@ class Chaos:
 
     def handle(self, event):
         rnd = random.random()
-        if rnd > (self._loose_ratio + self._duplication_ratio):
+        if rnd >= (self._loose_ratio + self._duplication_ratio):
             self._handler.handle(event)
-        elif rnd > self._loose_ratio:
+        elif rnd >= self._loose_ratio:
             self._handler.handle(event)
             self._handler.handle(event)
 
