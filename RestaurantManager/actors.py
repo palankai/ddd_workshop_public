@@ -4,11 +4,15 @@ import os
 import queue
 import threading
 import time
+import uuid
 
-from documents import OrderDocument
-from buses import TopicBasedPubSub
-from messages import OrderPlaced, OrderPriced, OrderPaid, FoodCooked
 from conrurrency import ThreadProcessor
+from documents import OrderDocument
+from messages import OrderPlaced, OrderPriced, OrderPaid, FoodCooked
+
+
+def get_uuid():
+    return str(uuid.uuid4())
 
 
 class OrderPrinter:
@@ -17,7 +21,7 @@ class OrderPrinter:
         pass
 
     def handle(self, event):
-        pprint(event.order)
+        print(f'{type(event)}; MessageId: {event.message_id} Caused by: {event.causation_id}, Correlation: {event.correlation_id}\n{event.order}')
 
 
 class Waiter:
@@ -28,7 +32,12 @@ class Waiter:
 
     def place_order(self, **kwargs):
         order = OrderDocument(kwargs)
-        self._bus.publish('order_placed', OrderPlaced(order))
+        event = OrderPlaced(
+            order=order,
+            correlation_id=get_uuid(),
+        )
+        self._bus.publish('order_placed', event)
+        return event
 
 
 class Cook:
@@ -51,7 +60,14 @@ class Cook:
         )
         order.cook_time = 600
         order.made_it = self._name
-        self._bus.publish('order_cooked', FoodCooked(order))
+        self._bus.publish(
+            'order_cooked',
+            FoodCooked(
+                order,
+                correlation_id=event.correlation_id,
+                causation_id=event.message_id
+            )
+        )
 
 
 class AssistantManager:
@@ -64,7 +80,14 @@ class AssistantManager:
         order = event.order
         for l in order.lines:
             l.price = 12
-        self._bus.publish('order_priced', OrderPriced(order))
+        self._bus.publish(
+            'order_priced',
+            OrderPriced(
+                order,
+                correlation_id=event.correlation_id,
+                causation_id=event.message_id
+            )
+        )
 
 
 class Cashier:
@@ -77,20 +100,29 @@ class Cashier:
 
     def handle(self, event):
         order = event.order
-        self._orders[order.reference] = order
+        self._orders[order.reference] = event
 
     def pay(self, reference):
-        order = self._orders[reference]
+        event = self._orders[reference]
+        order = event.order
         order.paid = True
         self._processed += 1
-        self._bus.publish('order_paid', OrderPriced(order))
+        self._bus.publish(
+            'order_paid',
+            OrderPriced(
+                order,
+                correlation_id=event.correlation_id,
+                causation_id=event.message_id
+            )
+        )
 
     def get_info(self):
         return f'Processed: {self._processed}'
 
     def get_outstanding_orders(self):
         orders = []
-        for order in self._orders.values():
+        for event in self._orders.values():
+            order = event.order
             if not hasattr(order, 'paid') or not order.paid:
                 orders.append(order)
         return orders
@@ -162,9 +194,6 @@ class QueueHandler(ThreadProcessor):
         self._handler.handle(order)
 
 
-
-
-
 class Monitor(ThreadProcessor):
 
     def __init__(self, handlers):
@@ -177,74 +206,3 @@ class Monitor(ThreadProcessor):
             print('*', handler.get_info())
         print('*' * 40)
         time.sleep(.5)
-
-
-def main():
-    bus = TopicBasedPubSub()
-
-    printer = OrderPrinter()
-
-    cashier = Cashier(bus)
-
-    assman = AssistantManager(bus)
-    assman_queue = QueueHandler(assman, 'assmanQ')
-
-
-    cook1 = Cook(bus, .1, 'Cook 1')
-    cook2 = Cook(bus, .3, 'Cook 2')
-    cook3 = Cook(bus, .5, 'Cook 3')
-    queue_handler1 = QueueHandler(cook1, 'cook1Q')
-    queue_handler2 = QueueHandler(cook2, 'cook2Q')
-    queue_handler3 = QueueHandler(cook3, 'cook3Q')
-    # multiplexer = RoundRobinDispatcher([queue_handler1, queue_handler2, queue_handler3])
-    more_fair_dispatcher = MoreFairDispatcher([queue_handler1, queue_handler2, queue_handler3], 5)
-    mfd_queue = QueueHandler(more_fair_dispatcher, 'MFD')
-
-    waiter = Waiter(bus)
-
-    monitor = Monitor([queue_handler1, queue_handler2, queue_handler3, assman_queue, mfd_queue, cashier])
-
-    # Subscriptions
-    bus.subscribe('order_placed', mfd_queue.handle)
-    bus.subscribe('order_cooked', assman_queue.handle)
-    bus.subscribe('order_priced', cashier.handle)
-    bus.subscribe('order_paid', printer.handle)
-
-
-
-    # Start
-    # bus.start()
-    monitor.start()
-    queue_handler1.start()
-    queue_handler2.start()
-    queue_handler3.start()
-    assman_queue.start()
-    mfd_queue.start()
-
-
-
-    for indx in range(100):
-        waiter.place_order(
-            reference=f'ABC-{indx}',
-            lines=[{'name': 'Cheese Pizza', 'qty': 1}]
-        )
-
-
-    paid_total = 0
-    while paid_total < 100:
-        for order in cashier.get_outstanding_orders():
-            cashier.pay(order.reference)
-            paid_total += 1
-        print('Wait for more orders to come...')
-        time.sleep(1)
-
-    queue_handler1.stop()
-    queue_handler2.stop()
-    queue_handler3.stop()
-    assman_queue.stop()
-    mfd_queue.stop()
-    monitor.stop()
-
-
-if __name__ == '__main__':
-    main()

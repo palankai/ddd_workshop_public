@@ -17,6 +17,9 @@ class TopicBasedPubSub:
     def publish(self, topic, message):
         for handler in self._handlers[topic]:
             handler(message)
+        correlation_id = message.correlation_id
+        for handler in self._handlers[correlation_id]:
+            handler(message)
 
     def subscribe(self, topic, handler):
         self._lock.acquire()
