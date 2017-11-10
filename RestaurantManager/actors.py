@@ -6,29 +6,18 @@ import threading
 import time
 
 from documents import OrderDocument
+from buses import TopicBasedPubSub
+from messages import OrderPlaced, OrderPriced, OrderPaid, FoodCooked
+from conrurrency import ThreadProcessor
 
 
-class HandleOrder:
-
-    def handle(self, order):
-        raise NotImplementedError()
-
-class Forwarder:
-
-    def __init__(self, handler):
-        self._handler = handler
-
-    def forward(self, order):
-        self._handler.handle(order.copy())
-
-
-class OrderPrinter(HandleOrder):
+class OrderPrinter:
 
     def __init__(self):
         pass
 
-    def handle(self, order):
-        pprint(order)
+    def handle(self, event):
+        pprint(event.order)
 
 
 class Waiter:
@@ -39,10 +28,10 @@ class Waiter:
 
     def place_order(self, **kwargs):
         order = OrderDocument(kwargs)
-        self._bus.publish('order_placed', order)
+        self._bus.publish('order_placed', OrderPlaced(order))
 
 
-class Cook(HandleOrder):
+class Cook:
     """Enricher"""
 
     def __init__(self, bus, time_to_sleep, name):
@@ -50,7 +39,8 @@ class Cook(HandleOrder):
         self._time_to_sleep = time_to_sleep
         self._bus = bus
 
-    def handle(self, order):
+    def handle(self, event):
+        order = event.order
         time.sleep(self._time_to_sleep)
         order.ingredients = []
         order.ingredients.append(
@@ -61,7 +51,7 @@ class Cook(HandleOrder):
         )
         order.cook_time = 600
         order.made_it = self._name
-        self._bus.publish('order_cooked', order)
+        self._bus.publish('order_cooked', FoodCooked(order))
 
 
 class AssistantManager:
@@ -70,10 +60,11 @@ class AssistantManager:
     def __init__(self, bus):
         self._bus = bus
 
-    def handle(self, order):
+    def handle(self, event):
+        order = event.order
         for l in order.lines:
             l.price = 12
-        self._bus.publish('order_priced', order)
+        self._bus.publish('order_priced', OrderPriced(order))
 
 
 class Cashier:
@@ -84,14 +75,15 @@ class Cashier:
         self._processed = 0
         self._bus = bus
 
-    def handle(self, order):
+    def handle(self, event):
+        order = event.order
         self._orders[order.reference] = order
 
     def pay(self, reference):
         order = self._orders[reference]
         order.paid = True
         self._processed += 1
-        self._bus.publish('order_paid', order)
+        self._bus.publish('order_paid', OrderPriced(order))
 
     def get_info(self):
         return f'Processed: {self._processed}'
@@ -102,8 +94,6 @@ class Cashier:
             if not hasattr(order, 'paid') or not order.paid:
                 orders.append(order)
         return orders
-
-
 
 class Multiplexer:
 
@@ -126,39 +116,34 @@ class RoundRobinDispatcher:
         handler.handle(order.copy())
 
 
-class ThreadProcessor:
+class MoreFairDispatcher:
 
-    def __init__(self):
-        self._running = False
+    def __init__(self, handlers, limit):
+        self._limit = limit
+        self._handlers = handlers
 
-    def run_once(self):
-        raise NotImplementedError()
+    def handle(self, order):
+        handler = None
+        while handler is None:
+            handler = self._pick_one_handler()
+        handler.handle(order)
 
-    def run(self):
-        assert not self._running
-        self._running = True
-        while self._running:
-            self.run_once()
-        self._running = False
-
-    def start(self):
-        manager = threading.Thread(target=self.run)
-        manager.start()
-
-    def stop(self):
-        self._running = False
+    def _pick_one_handler(self):
+        for handler in self._handlers:
+            if handler.get_queue_size() < self._limit:
+                return handler
 
 
-class QueueHandler:
+class QueueHandler(ThreadProcessor):
 
     def __init__(self, handler, name):
         self._name = name
         self._handler = handler
         self._queue = queue.Queue()
-        self._running = False
+        super().__init__()
 
     def handle(self, order):
-        self._queue.put(order.copy())
+        self._queue.put(order)
 
     def get_queue_size(self):
         return self._queue.qsize()
@@ -169,41 +154,15 @@ class QueueHandler:
     def get_info(self):
         return f'{self.get_name()}: {self.get_queue_size()}'
 
-    def start(self):
-        assert not self._running
-        self._running = True
-
-        def internal():
-            while self._running:
-                try:
-                    order = self._queue.get(timeout=1)
-                except queue.Empty:
-                    continue
-                self._handler.handle(order)
-
-        manager = threading.Thread(target=internal)
-        manager.start()
-
-    def stop(self):
-        self._running = False
-
-
-class TopicBasedPubSub:
-
-    def __init__(self):
-        self._handlers = collections.defaultdict(tuple)
-        self._lock = threading.Lock()
-
-    def publish(self, topic, message):
-        for handler in self._handlers[topic]:
-            handler(message.copy())
-
-    def subscribe(self, topic, handler):
-        self._lock.acquire()
+    def run_once(self):
         try:
-            self._handlers[topic] = self._handlers[topic] + (handler, )
-        finally:
-            self._lock.release()
+            order = self._queue.get(timeout=1)
+        except queue.Empty:
+            return
+        self._handler.handle(order)
+
+
+
 
 
 class Monitor(ThreadProcessor):
@@ -219,24 +178,6 @@ class Monitor(ThreadProcessor):
         print('*' * 40)
         time.sleep(.5)
 
-
-class MoreFairDispatcher:
-
-    def __init__(self, handlers, limit):
-        self._limit = limit
-        self._handlers = handlers
-
-    def handle(self, order):
-        order = order.copy()
-        handler = None
-        while handler is None:
-            handler = self._pick_one_handler()
-        handler.handle(order)
-
-    def _pick_one_handler(self):
-        for handler in self._handlers:
-            if handler.get_queue_size() < self._limit:
-                return handler
 
 def main():
     bus = TopicBasedPubSub()
@@ -272,6 +213,7 @@ def main():
 
 
     # Start
+    # bus.start()
     monitor.start()
     queue_handler1.start()
     queue_handler2.start()
