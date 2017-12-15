@@ -1,3 +1,47 @@
+"""
+Process manager manages the message flow.
+Process manager forwards the messages between the `=` lines
+the `-` lines are composition separation only
+
+The expected flow:
+           (W)         | Waiter, originator (Actor)
+            o          | The document
+    ======== ======== 
+           (*)         | START
+    ======== ========
+           [ ]         |
+           [ ]         |
+           [ ]         | Queue handler (Reactor)
+           [o]         |
+           [o]
+    -------- --------
+            x          |
+           /           | MoreFairDispatcher (Reactor)
+          /            | 
+         /             |
+    ---- --- --- ----   
+       [ ] [ ] [o]     |
+    -> [ ] [o] [o]     | Queue Handlers of Cooks (Reactor)
+       [o] [o] [o]     |
+    ---- --- --- ----
+       (C) (C) (C)     | Cooks (Actor)
+    ==== === === ====
+        \   |   /      |
+         \  |  /       |
+          \ | /        |
+           \|/         |
+           [ ]         | Queue handler of AssMan (Reactor)
+           [ ]         | Dequeuing
+           [ ]         | 
+           [o]         |
+           [o]         |
+    ======== ========
+           (A)         | Assistant Manager (Actor)
+    ======== ========
+           (C)         | Cashier (Actor)
+    ======== ========
+           (*)         | STOP
+"""
 import os
 import sys
 import time
