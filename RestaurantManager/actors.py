@@ -1,14 +1,28 @@
-from pprint import pprint
-import collections
-import os
-import queue
-import threading
-import time
-import uuid
-import random
-import datetime
+"""
+Actors are the first class citizens of the application.
 
-from conrurrency import ThreadProcessor
+- Universal primitive of concurrent computation
+- completely isolated from eachother
+
+They can:
+  - Send messages (to other actors)
+  - create more actors
+  - designate what to do with the next message
+
+In our implementation they don't know anything about
+the others.
+
+The **Originator** doesn't receive any _Event_,
+but it generate _Events_.
+
+The **Enrichers** receive _Command_, do they part,
+and they can send _Events_ as well.
+"""
+from pprint import pprint
+import uuid
+import time
+
+
 from documents import OrderDocument
 from messages import OrderPlaced, OrderPriced, OrderPaid, FoodCooked
 
@@ -28,7 +42,9 @@ class OrderPrinter:
 
 
 class Waiter:
-    """Originator"""
+    """
+    Originator
+    """
 
     def __init__(self, bus):
         self._bus = bus
@@ -45,7 +61,12 @@ class Waiter:
 
 
 class Cook:
-    """Enricher"""
+    """
+    Enricher
+
+    In this code it also responsible for deduplication,
+    although it could be moved out to a reactor.
+    """
 
     def __init__(self, bus, cooked, time_to_sleep, name):
         self._name = name
@@ -136,124 +157,3 @@ class Cashier:
             if not hasattr(order, 'paid') or not order.paid:
                 orders.append(order)
         return orders
-
-
-class Multiplexer:
-
-    def __init__(self, handlers):
-        self._handlers = handlers
-
-    def handle(self, order):
-        for h in self._handlers:
-            h.handle(order.copy())
-
-
-class RoundRobinDispatcher:
-
-    def __init__(self, handlers):
-        self._handlers = list(handlers)
-
-    def handle(self, order):
-        handler = self._handlers.pop(0)
-        self._handlers.append(handler)
-        handler.handle(order.copy())
-
-
-class MoreFairDispatcher:
-
-    def __init__(self, handlers, limit):
-        self._limit = limit
-        self._handlers = handlers
-
-    def handle(self, order):
-        handler = None
-        while handler is None:
-            handler = self._pick_one_handler()
-        handler.handle(order)
-
-    def _pick_one_handler(self):
-        for handler in self._handlers:
-            if handler.get_queue_size() < self._limit:
-                return handler
-
-
-class QueueHandler(ThreadProcessor):
-
-    def __init__(self, handler, name):
-        self._name = name
-        self._handler = handler
-        self._queue = queue.Queue()
-        super().__init__()
-
-    def handle(self, order):
-        self._queue.put(order)
-
-    def get_queue_size(self):
-        return self._queue.qsize()
-
-    def get_name(self):
-        return self._name
-
-    def get_info(self):
-        return f'{self.get_name()}: {self.get_queue_size()}'
-
-    def run_once(self):
-        try:
-            order = self._queue.get(timeout=1)
-        except queue.Empty:
-            return
-        self._handler.handle(order)
-
-
-class AlarmClock(ThreadProcessor):
-
-    def __init__(self, bus):
-        self._messages = []
-        self._bus = bus
-        super().__init__()
-
-    def handle(self, message):
-        when = datetime.datetime.utcnow() + datetime.timedelta(seconds=message.delay)
-        self._messages.append((when, message))
-
-    def run_once(self):
-        now = datetime.datetime.utcnow()
-        for element in list(self._messages):
-            when, message = element
-            if now > when:
-                self._bus.publish(message.topic, message.message)
-                self._messages.remove(element)
-                print('******* WAKE **********')
-        time.sleep(1)
-
-
-
-class Chaos:
-
-    def __init__(self, handler, loose_ratio=0.3, duplication_ratio=0.4):
-        self._handler = handler
-        self._loose_ratio = loose_ratio
-        self._duplication_ratio = duplication_ratio
-        random.seed()
-
-    def handle(self, event):
-        rnd = random.random()
-        if rnd >= (self._loose_ratio + self._duplication_ratio):
-            self._handler.handle(event)
-        elif rnd >= self._loose_ratio:
-            self._handler.handle(event)
-            self._handler.handle(event)
-
-
-class Monitor(ThreadProcessor):
-
-    def __init__(self, handlers):
-        self._handlers = handlers
-        super().__init__()
-
-    def run_once(self):
-        print('*' * 40)
-        for handler in self._handlers:
-            print('*', handler.get_info())
-        print('*' * 40)
-        time.sleep(.5)

@@ -1,3 +1,13 @@
+"""
+The document which is passed through the system.
+
+Important rule here is that the `Document` object
+should only care the part which it understands
+but have to be able to
+- make a copy of the document
+- modify some part of the document
+without understanding the whole.
+"""
 import json
 import copy
 

@@ -5,76 +5,90 @@ import time
 from buses import TopicBasedPubSub
 from messages import OrderPlaced, OrderPriced, OrderPaid, FoodCooked
 from actors import OrderPrinter, Cashier, Cook, Waiter, AssistantManager
-from actors import QueueHandler, MoreFairDispatcher
-from actors import Chaos
-from actors import Monitor, AlarmClock
+from reactors import QueueHandler, MoreFairDispatcher
+from reactors import Chaos
+from reactors import Monitor, AlarmClock
 from process_manager import MidgetHouse
 
 
 def main(envs, prog, raw_args):
+    # The backbone of the application, the messaging system
     bus = TopicBasedPubSub()
 
-    printer = OrderPrinter()
+    # Actors
+    # They might have bus as an input or any other infrastructure
+    # requirement, but they don't know each other, therefore the order
+    # of instantiation doesn't matter.
 
-    cashier = Cashier(bus)
-
-    assman = AssistantManager(bus)
-    assman_queue = QueueHandler(assman, 'assmanQ')
-
-
+    # Cook has a shared state, the cooked food (for deduplication)
     cooked = []
-
     cook1 = Cook(bus, cooked, .1, 'Cook 1')
     cook2 = Cook(bus, cooked, .3, 'Cook 2')
     cook3 = Cook(bus, cooked, .5, 'Cook 3')
-    queue_handler1 = QueueHandler(cook1, 'cook1Q')
-    queue_handler2 = QueueHandler(cook2, 'cook2Q')
-    queue_handler3 = QueueHandler(cook3, 'cook3Q')
-    # multiplexer = RoundRobinDispatcher([queue_handler1, queue_handler2, queue_handler3])
-    more_fair_dispatcher = MoreFairDispatcher([queue_handler1, queue_handler2, queue_handler3], 5)
-    mfd_queue = QueueHandler(more_fair_dispatcher, 'MFD')
-    cook_queue_chaos = Chaos(mfd_queue, 0.3, 0.3)
-
+    printer = OrderPrinter()
     waiter = Waiter(bus)
+    cashier = Cashier(bus)
+    assman = AssistantManager(bus)
+
+
+    assman_queue = QueueHandler(assman, 'assmanQ')
+    cook1_queue = QueueHandler(cook1, 'cook1Q')
+    cook2_queue = QueueHandler(cook2, 'cook2Q')
+    cook3_queue = QueueHandler(cook3, 'cook3Q')
+    
+    # multiplexer = RoundRobinDispatcher([cook1_queue, cook2_queue, cook3_queue])
+    cooks_dispatcher = MoreFairDispatcher([cook1_queue, cook2_queue, cook3_queue], 5)
+    cooks_dispatcher_queue = QueueHandler(cooks_dispatcher, 'MFD')
+    cooks_chaos = Chaos(cooks_dispatcher_queue, 0.3, 0.3)
+
     alarm_clock = AlarmClock(bus)
 
     midget_house = MidgetHouse(bus)
 
     monitor = Monitor([
-        queue_handler1, queue_handler2, queue_handler3, assman_queue,
-        mfd_queue, cashier, midget_house, bus
+        cook1_queue, cook2_queue, cook3_queue,
+        assman_queue, cashier,
+        cooks_dispatcher_queue, midget_house, bus
     ])
 
 
-    # Subscriptions
-    # bus.subscribe('order_placed', mfd_queue.handle)
-    # bus.subscribe('order_cooked', assman_queue.handle)
-    # bus.subscribe('order_priced', cashier.handle)
-    # bus.subscribe('order_paid', printer.handle)
+    # Cook (eventually) responds to the `CookFood` Command
+    bus.subscribe('cook_food', cooks_chaos.handle)
 
-    bus.subscribe('cook_food', cook_queue_chaos.handle)
+    # AssistantManager responds to the `PriceOrder` Command
     bus.subscribe('price_order', assman_queue.handle)
+
+    # Cashier responds to the `TakePayment` Command
     bus.subscribe('take_payment', cashier.handle)
 
+    # Printer prints the document
     bus.subscribe('order_paid', printer.handle)
 
+    # The process manager responds to the `OrderPlaced` event
+    # and the `OrderCompleted` event.
+    # These are the *Start* and *End* signals of the process manager
     bus.subscribe('order_placed', midget_house.handle)
     bus.subscribe('order_completed', midget_house.handle_unsubscribe)
 
+    # The alarm clock responds the `DelayPublished` command
     bus.subscribe('delay_publish', alarm_clock.handle)
 
     # Start
-    # bus.start()
+    # Start all of the services, fire up queues
     monitor.start()
-    queue_handler1.start()
-    queue_handler2.start()
-    queue_handler3.start()
+    cook1_queue.start()
+    cook2_queue.start()
+    cook3_queue.start()
+    cooks_dispatcher_queue.start()
     assman_queue.start()
-    mfd_queue.start()
     alarm_clock.start()
 
+    # From this point forward the system is ready to process
 
 
+    # Place 100 orders
+    # based on the `doggy` flag, the Process manager can decide
+    # which flow should be followed
     for indx in range(100):
         event = waiter.place_order(
             doggy=False, # (indx % 2 == 0),
@@ -94,11 +108,11 @@ def main(envs, prog, raw_args):
         print(f'Wait for more orders to come...')
         time.sleep(1)
 
-    queue_handler1.stop()
-    queue_handler2.stop()
-    queue_handler3.stop()
+    cook1_queue.stop()
+    cook2_queue.stop()
+    cook3_queue.stop()
     assman_queue.stop()
-    mfd_queue.stop()
+    cooks_dispatcher_queue.stop()
     monitor.stop()
     alarm_clock.stop()
 

@@ -1,13 +1,26 @@
+"""
+Every message should have tree very important identifier
+A Message can be: Command or Event
+
+MessageId:
+  Unique id, identifies every single message
+CausationId:
+  Identifies the message which caused the message
+  to be created
+CorrelationId:
+  Unique id, identifies the message flow.
+  The first message in the flow (which doesn't have causation id)
+  creates the CorrelationId. Every subsequent message should
+  use the same CorrelationId.
+"""
 import json
 import uuid
 
 class Message:
-
     def __init__(self, correlation_id, causation_id=None, message_id=None):
         self.correlation_id = correlation_id
         self.causation_id = causation_id
         self.message_id = message_id or str(uuid.uuid4())
-
 
 class OrderBased(Message):
 
